@@ -82,17 +82,17 @@ class Session(ndb.Model):
     highlights      = ndb.StringProperty()
     speaker         = ndb.StringProperty(repeated=True)
     duration        = ndb.IntegerProperty() 
-    typeOfSession   = ndb.StringProperty(default='NOT_SPECIFIED')
+    typeOfSession   = ndb.StringProperty()
     date            = ndb.DateProperty()
-    startTime       = ndb.TimeProperty(auto_now=True)
+    startTime       = ndb.TimeProperty(auto_now_add=True)
 
 class SessionForm(messages.Message):
     """SessionForm -- populates the session object"""
     name            = messages.StringField(1)
     highlights      = messages.StringField(2)
     speaker         = messages.StringField(3, repeated=True)
-    duration        = messages.IntegerField(4, variant=messages.Variant.INT32)
-    typeOfSession   = messages.EnumField('typeOfSession', 5)
+    duration        = messages.IntegerField(4)
+    typeOfSession   = messages.StringField(5)
     date            = messages.StringField(6) #DateTimeField()
     startTime       = messages.StringField(7) #DateTimeField()
     confWebSafeKey  = messages.StringField(8)

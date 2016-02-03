@@ -34,6 +34,8 @@ from models import BooleanMessage
 from models import Conference
 from models import ConferenceForm
 from models import ConferenceForms
+from models import Session
+from models import SessionForm
 from models import ConferenceQueryForm
 from models import ConferenceQueryForms
 from models import TeeShirtSize
@@ -82,6 +84,11 @@ CONF_POST_REQUEST = endpoints.ResourceContainer(
     websafeConferenceKey=messages.StringField(1),
 )
 
+SESH_POST_REQUEST = endpoints.ResourceContainer(
+    SessionForm,
+    websafeConferenceKey=messages.StringField(1),
+)
+
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
@@ -90,6 +97,82 @@ CONF_POST_REQUEST = endpoints.ResourceContainer(
     scopes=[EMAIL_SCOPE])
 class ConferenceApi(remote.Service):
     """Conference API v0.1"""
+
+# - - - Profile objects - - - - - - - - - - - - - - - - - - -
+
+    def _copyProfileToForm(self, prof):
+        """Copy relevant fields from Profile to ProfileForm."""
+        # copy relevant fields from Profile to ProfileForm
+        pf = ProfileForm()
+        for field in pf.all_fields():
+            if hasattr(prof, field.name):
+                # convert t-shirt string to Enum; just copy others
+                if field.name == 'teeShirtSize':
+                    setattr(pf, field.name, getattr(TeeShirtSize, getattr(prof, field.name)))
+                else:
+                    setattr(pf, field.name, getattr(prof, field.name))
+        pf.check_initialized()
+        return pf
+
+
+    def _getProfileFromUser(self):
+        """Return user Profile from datastore, creating new one if non-existent."""
+        # make sure user is authed
+        user = endpoints.get_current_user()
+        if not user:
+            raise endpoints.UnauthorizedException('Authorization required')
+
+        # get Profile from datastore
+        user_id = getUserId(user)
+        p_key = ndb.Key(Profile, user_id)
+        profile = p_key.get()
+        # create new Profile if not there
+        if not profile:
+            profile = Profile(
+                key = p_key,
+                displayName = user.nickname(),
+                mainEmail= user.email(),
+                teeShirtSize = str(TeeShirtSize.NOT_SPECIFIED),
+            )
+            profile.put()
+
+        return profile      # return Profile
+
+
+    def _doProfile(self, save_request=None):
+        """Get user Profile and return to user, possibly updating it first."""
+        # get user Profile
+        prof = self._getProfileFromUser()
+
+        # if saveProfile(), process user-modifyable fields
+        if save_request:
+            for field in ('displayName', 'teeShirtSize'):
+                if hasattr(save_request, field):
+                    val = getattr(save_request, field)
+                    if val:
+                        setattr(prof, field, str(val))
+                        #if field == 'teeShirtSize':
+                        #    setattr(prof, field, str(val).upper())
+                        #else:
+                        #    setattr(prof, field, val)
+            prof.put()
+
+        # return ProfileForm
+        return self._copyProfileToForm(prof)
+
+
+    @endpoints.method(message_types.VoidMessage, ProfileForm,
+            path='profile', http_method='GET', name='getProfile')
+    def getProfile(self, request):
+        """Return user profile."""
+        return self._doProfile()
+
+
+    @endpoints.method(ProfileMiniForm, ProfileForm,
+            path='profile', http_method='POST', name='saveProfile')
+    def saveProfile(self, request):
+        """Update & return user profile."""
+        return self._doProfile(request)
 
 # - - - Conference objects - - - - - - - - - - - - - - - - -
 
@@ -331,115 +414,106 @@ class ConferenceApi(remote.Service):
 
 # - - - Session objects - - - - - - - - - - - - - - - - -
 
+#  ------------
+#  |  TASK 1  |
+#  ------------
     def _copySessionToForm(self, sesh):
         """Copy relevant fields from Session to SessionForm"""
         sf = SessionForm()
         for field in sf.all_fields():
             if hasattr(sesh, field.name):
-                # convert Date to date string; just copy others
-                if field.name.endswith('Date'):
+                # convert Time or Date to date string; just copy others
+                if field.name.endswith(('startTime', 'date')):
                     setattr(sf, field.name, str(getattr(sesh, field.name)))
                 else:
                     setattr(sf, field.name, getattr(sesh, field.name))
             elif field.name == "confWebSafeKey":
-                setattr(sf, field.name, conf.key.urlsafe())
+                setattr(sf, field.name, sesh.key.urlsafe())
+
         sf.check_initialized()
+
+        print sf
         return sf
 
+#  ------------
+#  |  TASK 1  |
+#  ------------
     def _createSessionObject(self, request):
         """Create or update Session Object, returning SessionForm/request"""
         # preload necessary data items
         user = endpoints.get_current_user()
         if not user:
-            raise endpoints.UnauthorizedException('Authorization required')
-            user_id = getUserId(user)
+            raise endpoints.UnauthorizedException('endpoints.get_current_user() failed. Authorization required')
+        user_id = getUserId(user)
 
         if not request.name:
             raise endpoints.UnauthorizedException("Session 'name' field required")
 
+        if not request.websafeConferenceKey:
+            raise endpoints.BadRequestException("Session 'websafeConferenceKey' field required")
+
+        # check if conf exists given websafeConfKey
+        # get conference; check that it exists
+        wsck = request.websafeConferenceKey
+        conf = ndb.Key(urlsafe=wsck).get()
+        if not conf:
+            raise endpoints.NotFoundException(
+                'No conference found with key: %s' % wsck)
+        print "1.======================checking if conf exists {}============".format(conf)
+
+        # check that user is owner
+        if user_id != conf.organizerUserId:
+            raise endpoints.ForbiddenException(
+                'Only the owner can add sessions.')
+
         # copy SessionForm/ProtoRPC Message into dict
         data = {field.name: getattr(request, field.name) for field in request.all_fields()}
         del data['confWebSafeKey']
+        del data['websafeConferenceKey']
+        print "2.======================printing the data {}============".format(data)
 
-        # add default values for those missing (both data model & outbound message)
+        # Convert dates from strings to Date objects; 
+        if data['date']:
+            data['date'] = datetime.strptime(data['date'][:10], "%Y-%m-%d").date()
+        if data['startTime']:
+            data['startTime'] = datetime.strptime(data['startTime'][:5], "%H:%M").time()
+        
+        print "3.======================converted date and startime {} {}============".format(request.date,request.startTime)
 
+        # define session ancestor key
+        # generate profile key based on conference id
+        # ID based on Profile key 
+        p_key = ndb.Key(Conference, conf.key.id())
+        s_id = Session.allocate_ids(size=1, parent=p_key)[0]
+        s_key = ndb.Key(Session, s_id, parent=p_key)
 
-# - - - Profile objects - - - - - - - - - - - - - - - - - - -
+        #s_id = Session.allocate_ids(size=1, parent=conf)[0]
+        #s_key = ndb.Key(Session, s_id, parent=conf)
 
-    def _copyProfileToForm(self, prof):
-        """Copy relevant fields from Profile to ProfileForm."""
-        # copy relevant fields from Profile to ProfileForm
-        pf = ProfileForm()
-        for field in pf.all_fields():
-            if hasattr(prof, field.name):
-                # convert t-shirt string to Enum; just copy others
-                if field.name == 'teeShirtSize':
-                    setattr(pf, field.name, getattr(TeeShirtSize, getattr(prof, field.name)))
-                else:
-                    setattr(pf, field.name, getattr(prof, field.name))
-        pf.check_initialized()
-        return pf
+        # create session
+        sesh = Session(
+            key             = s_key,
+            name            = data['name'],
+            highlights      = data['highlights'],
+            speaker         = data['speaker'],
+            duration        = data['duration'],
+            typeOfSession   = data['typeOfSession'],
+            date            = data['date'],
+            startTime       = data['startTime'],
+        )
+        print "4.======================It worked add default values for sesh {}".format(sesh)
 
+        sesh.put()
 
-    def _getProfileFromUser(self):
-        """Return user Profile from datastore, creating new one if non-existent."""
-        # make sure user is authed
-        user = endpoints.get_current_user()
-        if not user:
-            raise endpoints.UnauthorizedException('Authorization required')
+        return self._copySessionToForm(sesh)
 
-        # get Profile from datastore
-        user_id = getUserId(user)
-        p_key = ndb.Key(Profile, user_id)
-        profile = p_key.get()
-        # create new Profile if not there
-        if not profile:
-            profile = Profile(
-                key = p_key,
-                displayName = user.nickname(),
-                mainEmail= user.email(),
-                teeShirtSize = str(TeeShirtSize.NOT_SPECIFIED),
-            )
-            profile.put()
-
-        return profile      # return Profile
-
-
-    def _doProfile(self, save_request=None):
-        """Get user Profile and return to user, possibly updating it first."""
-        # get user Profile
-        prof = self._getProfileFromUser()
-
-        # if saveProfile(), process user-modifyable fields
-        if save_request:
-            for field in ('displayName', 'teeShirtSize'):
-                if hasattr(save_request, field):
-                    val = getattr(save_request, field)
-                    if val:
-                        setattr(prof, field, str(val))
-                        #if field == 'teeShirtSize':
-                        #    setattr(prof, field, str(val).upper())
-                        #else:
-                        #    setattr(prof, field, val)
-            prof.put()
-
-        # return ProfileForm
-        return self._copyProfileToForm(prof)
-
-
-    @endpoints.method(message_types.VoidMessage, ProfileForm,
-            path='profile', http_method='GET', name='getProfile')
-    def getProfile(self, request):
-        """Return user profile."""
-        return self._doProfile()
-
-
-    @endpoints.method(ProfileMiniForm, ProfileForm,
-            path='profile', http_method='POST', name='saveProfile')
-    def saveProfile(self, request):
-        """Update & return user profile."""
-        return self._doProfile(request)
-
+    @endpoints.method(SESH_POST_REQUEST, SessionForm,
+        path='session/{websafeConferenceKey}',
+        http_method='POST',
+        name='createSession')
+    def createSession(self, request):
+        """Create new Session"""
+        return self._createSessionObject(request)
 
 # - - - Registration - - - - - - - - - - - - - - - - - - - -
 
@@ -447,6 +521,7 @@ class ConferenceApi(remote.Service):
     def _conferenceRegistration(self, request, reg=True):
         """Register or unregister user for selected conference."""
         retval = None
+
         prof = self._getProfileFromUser() # get user Profile
 
         # check if conf exists given websafeConfKey
