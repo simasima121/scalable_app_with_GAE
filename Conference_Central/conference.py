@@ -36,6 +36,7 @@ from models import ConferenceForm
 from models import ConferenceForms
 from models import Session
 from models import SessionForm
+from models import SessionForms
 from models import ConferenceQueryForm
 from models import ConferenceQueryForms
 from models import TeeShirtSize
@@ -86,6 +87,11 @@ CONF_POST_REQUEST = endpoints.ResourceContainer(
 
 SESH_POST_REQUEST = endpoints.ResourceContainer(
     SessionForm,
+    websafeConferenceKey=messages.StringField(1),
+)
+
+SESH_GET_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
     websafeConferenceKey=messages.StringField(1),
 )
 
@@ -435,6 +441,18 @@ class ConferenceApi(remote.Service):
         print sf
         return sf
 
+        #session_form = SessionForm(
+        #    name=getattr(sesh, 'name'),
+        #    highlights=getattr(sesh, 'highlights'),
+        #    speaker=getattr(sesh, 'speaker'),
+        #    duration=getattr(sesh, 'duration'),
+        #    typeOfSession=getattr(sesh, 'typeOfSession'),
+        #    date=str(getattr(sesh, 'date')),
+         #   startTime=str(getattr(sesh, 'startTime')),
+         #   confWebSafeKey=str(sesh.key.urlsafe()),            
+         #   )
+        #return session_form
+
 #  ------------
 #  |  TASK 1  |
 #  ------------
@@ -452,6 +470,7 @@ class ConferenceApi(remote.Service):
         if not request.websafeConferenceKey:
             raise endpoints.BadRequestException("Session 'websafeConferenceKey' field required")
 
+        
         # check if conf exists given websafeConfKey
         # get conference; check that it exists
         wsck = request.websafeConferenceKey
@@ -459,7 +478,7 @@ class ConferenceApi(remote.Service):
         if not conf:
             raise endpoints.NotFoundException(
                 'No conference found with key: %s' % wsck)
-        print "1.======================checking if conf exists {}============".format(conf)
+        print "1. Checking if conf exists {}".format(conf)
 
         # check that user is owner
         if user_id != conf.organizerUserId:
@@ -470,7 +489,7 @@ class ConferenceApi(remote.Service):
         data = {field.name: getattr(request, field.name) for field in request.all_fields()}
         del data['confWebSafeKey']
         del data['websafeConferenceKey']
-        print "2.======================printing the data {}============".format(data)
+        print "2. Printing the data {}".format(data)
 
         # Convert dates from strings to Date objects; 
         if data['date']:
@@ -478,14 +497,18 @@ class ConferenceApi(remote.Service):
         if data['startTime']:
             data['startTime'] = datetime.strptime(data['startTime'][:5], "%H:%M").time()
         
-        print "3.======================converted date and startime {} {}============".format(request.date,request.startTime)
+        print "3. Converted date and startime {} {}".format(request.date,request.startTime)
 
         # define session ancestor key
         # generate profile key based on conference id
         # ID based on Profile key 
-        p_key = ndb.Key(Conference, conf.key.id())
-        s_id = Session.allocate_ids(size=1, parent=p_key)[0]
-        s_key = ndb.Key(Session, s_id, parent=p_key)
+        c_key = ndb.Key(urlsafe=request.websafeConferenceKey)
+        s_id = Session.allocate_ids(size=1, parent=c_key)[0]
+        s_key = ndb.Key(Session, s_id, parent=c_key)
+
+        print "4. Printing the c_key", c_key
+        print "5. Printing the s_id", s_id
+        print "6. Printing the s_key", s_key
 
         #s_id = Session.allocate_ids(size=1, parent=conf)[0]
         #s_key = ndb.Key(Session, s_id, parent=conf)
@@ -501,7 +524,8 @@ class ConferenceApi(remote.Service):
             date            = data['date'],
             startTime       = data['startTime'],
         )
-        print "4.======================It worked add default values for sesh {}".format(sesh)
+        print "7. Printing the sesh: ", sesh
+        print "0. Printing the websafeConferenceKey", request.websafeConferenceKey
 
         sesh.put()
 
@@ -514,6 +538,31 @@ class ConferenceApi(remote.Service):
     def createSession(self, request):
         """Create new Session"""
         return self._createSessionObject(request)
+
+    @endpoints.method(SESH_GET_REQUEST, SessionForms,
+        path='getConferenceSessions/{websafeConferenceKey}',
+        http_method='GET',
+        name='getConferenceSessions')
+    def getConferenceSessions(self, request):
+        """Given a conference, return all sessions"""
+        # make sure user is authed
+        user = endpoints.get_current_user()
+        if not user:
+            raise endpoints.UnauthorizedException('Authorization required')
+        user_id =  getUserId(user)
+
+        conf = ndb.Key(urlsafe=request.websafeConferenceKey)
+        print "1. This is the conf: ", conf
+
+        # create ancestor query for all key matches for this user
+        sessions = Session.query(ancestor=conf)
+        print "2. This is the sessions object: ", sessions
+
+        # return set of ConferenceForm objects per Conference
+        return SessionForms(
+            items=[self._copySessionToForm(session) for session in sessions]
+        )
+
 
 # - - - Registration - - - - - - - - - - - - - - - - - - - -
 

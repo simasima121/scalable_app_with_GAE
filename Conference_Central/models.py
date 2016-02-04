@@ -97,6 +97,10 @@ class SessionForm(messages.Message):
     startTime       = messages.StringField(7) #DateTimeField()
     confWebSafeKey  = messages.StringField(8)
 
+class SessionForms(messages.Message):
+    """ConferenceForms -- multiple Conference outbound form message"""
+    items = messages.MessageField(SessionForm, 1, repeated=True)
+
 class TeeShirtSize(messages.Enum):
     """TeeShirtSize -- t-shirt size enumeration value"""
     NOT_SPECIFIED = 1
