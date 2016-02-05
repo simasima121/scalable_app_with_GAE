@@ -98,7 +98,12 @@ SESH_GET_REQUEST = endpoints.ResourceContainer(
 SESH_QUERY_REQUEST = endpoints.ResourceContainer(
     message_types.VoidMessage,
     websafeConferenceKey=messages.StringField(1),
-    typeOfSession=messages.StringField(2)
+    typeOfSession=messages.StringField(2),
+)
+
+SPEAKER_QUERY_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    speaker=messages.StringField(1),
 )
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -579,6 +584,26 @@ class ConferenceApi(remote.Service):
         return SessionForms(
             items=[self._copySessionToForm(session) for session in sessions]
         )
+
+    @endpoints.method(SPEAKER_QUERY_REQUEST, SessionForms,
+            path='getSessionsBySpeaker',
+            http_method='GET',
+            name='getSessionsBySpeaker')
+    def getSessionsBySpeaker(self, request):
+        """Given a speaker, return all sessions given by this particular speaker, across all conferences"""
+        # make sure user is authed
+        user = endpoints.get_current_user()
+        if not user:
+            raise endpoints.UnauthorizedException('Authorization required')
+        user_id =  getUserId(user)
+
+        sessions = Session.query(Session.speaker == request.speaker)
+
+        return SessionForms(
+            items=[self._copySessionToForm(session) for session in sessions]
+        ) 
+
+
 
 # - - - Registration - - - - - - - - - - - - - - - - - - - -
 
