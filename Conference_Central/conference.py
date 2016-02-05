@@ -95,6 +95,11 @@ SESH_GET_REQUEST = endpoints.ResourceContainer(
     websafeConferenceKey=messages.StringField(1),
 )
 
+SESH_QUERY_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    websafeConferenceKey=messages.StringField(1),
+    typeOfSession=messages.StringField(2)
+)
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
@@ -441,18 +446,6 @@ class ConferenceApi(remote.Service):
         print sf
         return sf
 
-        #session_form = SessionForm(
-        #    name=getattr(sesh, 'name'),
-        #    highlights=getattr(sesh, 'highlights'),
-        #    speaker=getattr(sesh, 'speaker'),
-        #    duration=getattr(sesh, 'duration'),
-        #    typeOfSession=getattr(sesh, 'typeOfSession'),
-        #    date=str(getattr(sesh, 'date')),
-         #   startTime=str(getattr(sesh, 'startTime')),
-         #   confWebSafeKey=str(sesh.key.urlsafe()),            
-         #   )
-        #return session_form
-
 #  ------------
 #  |  TASK 1  |
 #  ------------
@@ -558,11 +551,34 @@ class ConferenceApi(remote.Service):
         sessions = Session.query(ancestor=conf)
         print "2. This is the sessions object: ", sessions
 
-        # return set of ConferenceForm objects per Conference
+        # return set of SessionForm objects per Session
         return SessionForms(
             items=[self._copySessionToForm(session) for session in sessions]
         )
 
+    @endpoints.method(SESH_QUERY_REQUEST, SessionForms,
+            path='getConferenceSessionsByType/{websafeConferenceKey}',
+            http_method='GET',
+            name='getConferenceSessionsByType')
+    def getConferenceSessionsByType(self, request):
+        """Given a conference, return all sessions of a specified type"""
+        # make sure user is authed
+        user = endpoints.get_current_user()
+        if not user:
+            raise endpoints.UnauthorizedException('Authorization required')
+        user_id =  getUserId(user)
+
+        conf = ndb.Key(urlsafe=request.websafeConferenceKey)
+
+        # create ancestor query for all key matches for this user
+        sessions = Session.query(ancestor=conf)
+
+        sessions = Session.query(Session.typeOfSession == request.typeOfSession)
+           
+        # return set of SessionForm objects per Session by type
+        return SessionForms(
+            items=[self._copySessionToForm(session) for session in sessions]
+        )
 
 # - - - Registration - - - - - - - - - - - - - - - - - - - -
 
