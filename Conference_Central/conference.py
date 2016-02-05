@@ -498,8 +498,7 @@ class ConferenceApi(remote.Service):
         print "3. Converted date and startime {} {}".format(request.date,request.startTime)
 
         # define session ancestor key
-        # generate profile key based on conference id
-        # ID based on Profile key 
+        # generate sesion key based on conference key
         c_key = ndb.Key(urlsafe=request.websafeConferenceKey)
         s_id = Session.allocate_ids(size=1, parent=c_key)[0]
         s_key = ndb.Key(Session, s_id, parent=c_key)
@@ -507,9 +506,6 @@ class ConferenceApi(remote.Service):
         print "4. Printing the c_key", c_key
         print "5. Printing the s_id", s_id
         print "6. Printing the s_key", s_key
-
-        #s_id = Session.allocate_ids(size=1, parent=conf)[0]
-        #s_key = ndb.Key(Session, s_id, parent=conf)
 
         # create session
         sesh = Session(

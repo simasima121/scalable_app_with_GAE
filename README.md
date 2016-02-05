@@ -1,13 +1,6 @@
-App Engine application for the Udacity training course.
+#Project: Scalable App with GAE
 
-## Products
-- [App Engine][1]
-
-## Language
-- [Python][2]
-
-## APIs
-- [Google Cloud Endpoints][3]
+##How to Run Project
 
 ## Setup Instructions
 1. Update the value of `application` in `app.yaml` to the app ID you
@@ -23,6 +16,21 @@ App Engine application for the Udacity training course.
 1. (Optional) Generate your client library(ies) with [the endpoints tool][6].
 1. Deploy your application.
 
+##Miscellaneous
+
+To log into Facebook and Google, must create own app on their developer pages as my client secrets won't work here
+
+
+App Engine application for the Udacity training course.
+
+## Products
+- [App Engine][1]
+
+## Language
+- [Python][2]
+
+## APIs
+- [Google Cloud Endpoints][3]
 
 [1]: https://developers.google.com/appengine
 [2]: http://python.org
