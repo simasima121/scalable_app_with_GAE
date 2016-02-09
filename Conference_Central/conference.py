@@ -686,6 +686,20 @@ class ConferenceApi(remote.Service):
         """Delete session from wishlist"""
         return self._sessionWishlist(request, add=False)
 
+    @endpoints.method(message_types.VoidMessage, SessionForms,
+            path='session/wishlist',
+            http_method='GET', 
+            name='getSessionsInWishlist')
+    def getSessionsInWishlist(self, request):
+        """Get list of sessions in wishlist"""
+        prof = self._getProfileFromUser() # get user profile
+        sesh_keys = [ndb.Key(urlsafe=wssk) for wssk in prof.sessionsToWishlist]
+        sessions = ndb.get_multi(sesh_keys)
+        
+        return SessionForms(
+            items=[self._copySessionToForm(session) for session in sessions]
+        )
+
 
 
 # - - - Registration - - - - - - - - - - - - - - - - - - - -
