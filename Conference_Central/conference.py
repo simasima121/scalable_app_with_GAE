@@ -115,6 +115,11 @@ DATE_QUERY_REQUEST = endpoints.ResourceContainer(
     message_types.VoidMessage,
     date=messages.StringField(1),
 )
+
+STARTTIME_QUERY_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    startTime=messages.StringField(1),
+)
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
@@ -502,6 +507,7 @@ class ConferenceApi(remote.Service):
         # Convert dates from strings to Date objects; 
         if data['date']:
             data['date'] = datetime.strptime(data['date'][:10], "%Y-%m-%d").date()
+        # Convert times from strings to time objects; 
         if data['startTime']:
             data['startTime'] = datetime.strptime(data['startTime'][:5], "%H:%M").time()
         
@@ -631,11 +637,11 @@ class ConferenceApi(remote.Service):
 #  |  TASK 3  |
 #  ------------
     @endpoints.method(DATE_QUERY_REQUEST, SessionForms,
-            path='getSessionByDate',
+            path='getSessionsByDate',
             http_method='GET',
-            name='getSessionByDate')
-    def getSessionByDate(self, request):
-        """Given a Date, return all sessions by this Date, across all
+            name='getSessionsByDate')
+    def getSessionsByDate(self, request):
+        """Given a Date, return all sessions on this Date, across all
          conferences"""
         # make sure user is authed
         user = endpoints.get_current_user()
@@ -650,6 +656,31 @@ class ConferenceApi(remote.Service):
             data['date'] = datetime.strptime(data['date'][:10], "%Y-%m-%d").date()
 
         sessions = Session.query(Session.date == data['date'])
+
+        return SessionForms(
+            items=[self._copySessionToForm(session) for session in sessions]
+        )
+
+    @endpoints.method(STARTTIME_QUERY_REQUEST, SessionForms,
+            path='getSessionsByTime',
+            http_method='GET',
+            name='getSessionsByTime')
+    def getSessionsByTime(self, request):
+        """Given a time, return all sessions at this time, across all
+         conferences"""
+        # make sure user is authed
+        user = endpoints.get_current_user()
+        if not user:
+            raise endpoints.UnauthorizedException('Authorization required')
+        user_id =  getUserId(user)
+
+        data = {field.name: getattr(request, field.name) for field in request.all_fields()}
+
+        # Convert times from strings to time objects;  
+        if data['startTime']:
+            data['startTime'] = datetime.strptime(data['startTime'][:5], "%H:%M").time()
+
+        sessions = Session.query(Session.startTime == data['startTime'])
 
         return SessionForms(
             items=[self._copySessionToForm(session) for session in sessions]
