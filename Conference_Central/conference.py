@@ -678,7 +678,15 @@ class ConferenceApi(remote.Service):
         """Add session to a wishlist"""
         return self._sessionWishlist(request)
 
-    
+    @endpoints.method(WISHLIST_POST_REQUEST, BooleanMessage,
+            path='session/{SessionKey}',
+            http_method='DELETE', 
+            name='deleteSessionInWishlist')
+    def deleteSessionInWishlist(self, request):
+        """Delete session from wishlist"""
+        return self._sessionWishlist(request, add=False)
+
+
 
 # - - - Registration - - - - - - - - - - - - - - - - - - - -
 
