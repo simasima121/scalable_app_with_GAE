@@ -23,22 +23,24 @@ class ConflictException(endpoints.ServiceException):
 
 class Profile(ndb.Model):
     """Profile -- User profile object"""
-    displayName = ndb.StringProperty()
-    mainEmail = ndb.StringProperty()
-    teeShirtSize = ndb.StringProperty(default='NOT_SPECIFIED')
-    conferenceKeysToAttend = ndb.StringProperty(repeated=True)
+    displayName             = ndb.StringProperty()
+    mainEmail               = ndb.StringProperty()
+    teeShirtSize            = ndb.StringProperty(default='NOT_SPECIFIED')
+    conferenceKeysToAttend  = ndb.StringProperty(repeated=True)
+    sessionsToWishlist      = ndb.StringProperty(repeated=True)
 
 class ProfileMiniForm(messages.Message):
     """ProfileMiniForm -- update Profile form message"""
-    displayName = messages.StringField(1)
-    teeShirtSize = messages.EnumField('TeeShirtSize', 2)
+    displayName         = messages.StringField(1)
+    teeShirtSize        = messages.EnumField('TeeShirtSize', 2)
 
 class ProfileForm(messages.Message):
     """ProfileForm -- Profile outbound form message"""
-    displayName = messages.StringField(1)
-    mainEmail = messages.StringField(2)
-    teeShirtSize = messages.EnumField('TeeShirtSize', 3)
-    conferenceKeysToAttend = messages.StringField(4, repeated=True)
+    displayName             = messages.StringField(1)
+    mainEmail               = messages.StringField(2)
+    teeShirtSize            = messages.EnumField('TeeShirtSize', 3)
+    conferenceKeysToAttend  = messages.StringField(4, repeated=True)
+    sessionsToWishlist      = messages.StringField(5, repeated=True)
 
 class BooleanMessage(messages.Message):
     """BooleanMessage-- outbound Boolean value message"""
@@ -98,7 +100,7 @@ class SessionForm(messages.Message):
     confWebSafeKey  = messages.StringField(8)
 
 class SessionForms(messages.Message):
-    """ConferenceForms -- multiple Conference outbound form message"""
+    """SessionForms -- multiple Sessions outbound form message"""
     items = messages.MessageField(SessionForm, 1, repeated=True)
 
 class TeeShirtSize(messages.Enum):

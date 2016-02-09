@@ -37,6 +37,8 @@ from models import ConferenceForms
 from models import Session
 from models import SessionForm
 from models import SessionForms
+#from models import Wishlist
+#from models import WishlistForm
 from models import ConferenceQueryForm
 from models import ConferenceQueryForms
 from models import TeeShirtSize
@@ -85,13 +87,13 @@ CONF_POST_REQUEST = endpoints.ResourceContainer(
     websafeConferenceKey=messages.StringField(1),
 )
 
-SESH_POST_REQUEST = endpoints.ResourceContainer(
-    SessionForm,
+SESH_GET_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
     websafeConferenceKey=messages.StringField(1),
 )
 
-SESH_GET_REQUEST = endpoints.ResourceContainer(
-    message_types.VoidMessage,
+SESH_POST_REQUEST = endpoints.ResourceContainer(
+    SessionForm,
     websafeConferenceKey=messages.StringField(1),
 )
 
@@ -104,6 +106,11 @@ SESH_QUERY_REQUEST = endpoints.ResourceContainer(
 SPEAKER_QUERY_REQUEST = endpoints.ResourceContainer(
     message_types.VoidMessage,
     speaker=messages.StringField(1),
+)
+
+WISHLIST_POST_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    SessionKey = messages.StringField(1),
 )
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -599,7 +606,79 @@ class ConferenceApi(remote.Service):
             items=[self._copySessionToForm(session) for session in sessions]
         ) 
 
+    @endpoints.method(SessionForms, SessionForms,
+            path='getSessions',
+            http_method='GET',
+            name='getSessions')
+    def getSessions(self, request):
+        """return all sessions across all conferences"""
+        # make sure user is authed
+        user = endpoints.get_current_user()
+        if not user:
+            raise endpoints.UnauthorizedException('Authorization required')
+        user_id =  getUserId(user)
 
+        sessions = Session.query()
+
+        return SessionForms(
+            items=[self._copySessionToForm(session) for session in sessions]
+        ) 
+
+
+# - - - WishList - - - - - - - - - - - - - - - - - - - -
+
+#  ------------
+#  |  TASK 2  |
+#  ------------
+    @ndb.transactional(xg=True)
+    def _sessionWishlist(self, request, add=True):
+        """Add or remove session to wishlist"""
+        retval = None
+        # Get session profile
+        prof = self._getProfileFromUser()
+        print "1. This is the users profile: ", prof
+
+        # Check if sesh exists given websafeSeshKey
+        wssk = request.SessionKey
+        print "2. This is the request.sessionkey: ", wssk
+        sesh = ndb.Key(urlsafe=wssk).get()
+        print "3. This is the sesh: ", sesh
+        if not sesh:
+            raise endpoints.NotFoundException(
+                'No session found with key: %s' % wssk)
+
+        # adding
+        if add:
+            if wssk in prof.sessionsToWishlist:
+                raise ConflictException("Session already added to wishlist")
+
+            prof.sessionsToWishlist.append(wssk)
+            retval = True
+
+        # removing
+        else:
+            # check if session already in wishlist
+            if wssk in prof.sessionsToWishlist:
+                # remove from wishlist
+                prof.sessionsToWishlist.remove(wssk)
+                retval = True
+            else:
+                retval = False
+
+        # write things back to datastore & return
+        prof.put()
+
+        return BooleanMessage(data=retval)
+
+    @endpoints.method(WISHLIST_POST_REQUEST, BooleanMessage,
+            path='session/{SessionKey}',
+            http_method='POST', 
+            name='addSessionToWishlist')
+    def addSessionToWishlist(self, request):
+        """Add session to a wishlist"""
+        return self._sessionWishlist(request)
+
+    
 
 # - - - Registration - - - - - - - - - - - - - - - - - - - -
 
