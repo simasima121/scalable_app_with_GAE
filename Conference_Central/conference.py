@@ -37,8 +37,6 @@ from models import ConferenceForms
 from models import Session
 from models import SessionForm
 from models import SessionForms
-#from models import Wishlist
-#from models import WishlistForm
 from models import ConferenceQueryForm
 from models import ConferenceQueryForms
 from models import TeeShirtSize
@@ -111,6 +109,11 @@ SPEAKER_QUERY_REQUEST = endpoints.ResourceContainer(
 WISHLIST_POST_REQUEST = endpoints.ResourceContainer(
     message_types.VoidMessage,
     SessionKey = messages.StringField(1),
+)
+
+DATE_QUERY_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    date=messages.StringField(1),
 )
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -624,6 +627,35 @@ class ConferenceApi(remote.Service):
             items=[self._copySessionToForm(session) for session in sessions]
         ) 
 
+#  ------------
+#  |  TASK 3  |
+#  ------------
+    @endpoints.method(DATE_QUERY_REQUEST, SessionForms,
+            path='getSessionByDate',
+            http_method='GET',
+            name='getSessionByDate')
+    def getSessionByDate(self, request):
+        """Given a Date, return all sessions by this Date, across all
+         conferences"""
+        # make sure user is authed
+        user = endpoints.get_current_user()
+        if not user:
+            raise endpoints.UnauthorizedException('Authorization required')
+        user_id =  getUserId(user)
+
+        data = {field.name: getattr(request, field.name) for field in request.all_fields()}
+
+        # Convert dates from strings to Date objects; 
+        if data['date']:
+            data['date'] = datetime.strptime(data['date'][:10], "%Y-%m-%d").date()
+
+        sessions = Session.query(Session.date == data['date'])
+
+        return SessionForms(
+            items=[self._copySessionToForm(session) for session in sessions]
+        )
+
+    #def getWishlistByDuration
 
 # - - - WishList - - - - - - - - - - - - - - - - - - - -
 
@@ -695,12 +727,10 @@ class ConferenceApi(remote.Service):
         prof = self._getProfileFromUser() # get user profile
         sesh_keys = [ndb.Key(urlsafe=wssk) for wssk in prof.sessionsToWishlist]
         sessions = ndb.get_multi(sesh_keys)
-        
+
         return SessionForms(
             items=[self._copySessionToForm(session) for session in sessions]
         )
-
-
 
 # - - - Registration - - - - - - - - - - - - - - - - - - - -
 
