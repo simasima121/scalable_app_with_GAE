@@ -20,11 +20,10 @@ To solve this:
 
 1. filter `startTime: sessions = Session.filter(Session.startTime < 19:00)`
 2. create a dictionary with all the Sessions. Use a for loop to go through the dictionary and if the `typeOfSession`is not workshop`, append these sessions to another array and return these.
-
-`for type in dict:
+```for type in dict:
 	if type not "workshop":
 		filtered_sessions = sessions.filter(Session.typeOfSession == type)
 		wanted_sessions.append(filtered_sessions)
-return wanted_sessions`
+return wanted_sessions```
 
 
