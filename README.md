@@ -1,6 +1,16 @@
 #Project: Scalable App with GAE
+App Engine application for the Udacity training course.
+It's a conference organisation app.
 
-##How to Run Project
+##Required Libraries and Dependencies
+### Products
+- [App Engine][1]
+
+### Language
+- [Python][2]
+
+### APIs
+- [Google Cloud Endpoints][3]
 
 ## Setup Instructions
 1. Update the value of `application` in `app.yaml` to the app ID you
@@ -16,21 +26,19 @@
 1. (Optional) Generate your client library(ies) with [the endpoints tool][6].
 1. Deploy your application.
 
+##How to Run Project
+1. Open GoogleAppEngineLauncher
+2. Add Existing Application to the GoogleAppEngineLauncher using **file -> add existing application**
+3. Choose port addresses 
+4. Press run button and navigate to [localhost:<Port>]
+5. To view backend explorer, type [localhost:<Port>/_ah/api/explorer]
+5. When ready, press Deploy button in GoogleAppEngineLauncher
+6. Navigate to <application id>.appspot.com to view deployed app.
+
 ##Miscellaneous
+Must have Google account to login and must create own app on their developer pages
 
-To log into Facebook and Google, must create own app on their developer pages as my client secrets won't work here
 
-
-App Engine application for the Udacity training course.
-
-## Products
-- [App Engine][1]
-
-## Language
-- [Python][2]
-
-## APIs
-- [Google Cloud Endpoints][3]
 
 [1]: https://developers.google.com/appengine
 [2]: http://python.org
