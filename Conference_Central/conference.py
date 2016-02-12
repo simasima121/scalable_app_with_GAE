@@ -16,6 +16,8 @@ __author__ = 'wesc+api@google.com (Wesley Chun)'
 from datetime import datetime
 
 import endpoints
+import logging
+
 from protorpc import messages
 from protorpc import message_types
 from protorpc import remote
@@ -23,22 +25,13 @@ from protorpc import remote
 from google.appengine.api import memcache
 from google.appengine.api import taskqueue
 from google.appengine.ext import ndb
-from google.appengine.api import memcache
-from google.appengine.api import taskqueue
 
 from models import ConflictException
-from models import Profile
-from models import ProfileMiniForm
-from models import ProfileForm
+from models import Profile, ProfileMiniForm, ProfileForm
 from models import BooleanMessage
-from models import Conference
-from models import ConferenceForm
-from models import ConferenceForms
-from models import Session
-from models import SessionForm
-from models import SessionForms
-from models import ConferenceQueryForm
-from models import ConferenceQueryForms
+from models import Conference, ConferenceForm, ConferenceForms
+from models import ConferenceQueryForm, ConferenceQueryForms
+from models import Session, SessionForm, SessionForms
 from models import TeeShirtSize
 from models import StringMessage
 
@@ -49,6 +42,8 @@ from settings import WEB_CLIENT_ID
 EMAIL_SCOPE = endpoints.EMAIL_SCOPE
 API_EXPLORER_CLIENT_ID = endpoints.API_EXPLORER_CLIENT_ID
 MEMCACHE_ANNOUNCEMENTS_KEY = "RECENT_ANNOUNCEMENTS"
+MEMCACHE_FEATURED_KEY = "FEATURED_SPEAKER"
+
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -267,9 +262,6 @@ class ConferenceApi(remote.Service):
         data['key'] = c_key
         data['organizerUserId'] = request.organizerUserId = user_id
 
-        # create Conference, send email to organizer confirming
-        # creation of Conference & return (modified) ConferenceForm
-        Conference(**data).put()
         # TODO 2: add confirmation email sending task to queue
         # create Conference, send email to organizer confirming
         # creation of Conference & return (modified) ConferenceForm
@@ -482,7 +474,6 @@ class ConferenceApi(remote.Service):
 
         if not request.websafeConferenceKey:
             raise endpoints.BadRequestException("Session 'websafeConferenceKey' field required")
-
         
         # check if conf exists given websafeConfKey
         # get conference; check that it exists
@@ -491,7 +482,6 @@ class ConferenceApi(remote.Service):
         if not conf:
             raise endpoints.NotFoundException(
                 'No conference found with key: %s' % wsck)
-        print "1. Checking if conf exists {}".format(conf)
 
         # check that user is owner
         if user_id != conf.organizerUserId:
@@ -502,7 +492,6 @@ class ConferenceApi(remote.Service):
         data = {field.name: getattr(request, field.name) for field in request.all_fields()}
         del data['confWebSafeKey']
         del data['websafeConferenceKey']
-        print "2. Printing the data {}".format(data)
 
         # Convert dates from strings to Date objects; 
         if data['date']:
@@ -511,17 +500,11 @@ class ConferenceApi(remote.Service):
         if data['startTime']:
             data['startTime'] = datetime.strptime(data['startTime'][:5], "%H:%M").time()
         
-        print "3. Converted date and startime {} {}".format(request.date,request.startTime)
-
         # define session ancestor key
         # generate sesion key based on conference key
         c_key = ndb.Key(urlsafe=request.websafeConferenceKey)
         s_id = Session.allocate_ids(size=1, parent=c_key)[0]
         s_key = ndb.Key(Session, s_id, parent=c_key)
-
-        print "4. Printing the c_key", c_key
-        print "5. Printing the s_id", s_id
-        print "6. Printing the s_key", s_key
 
         # create session
         sesh = Session(
@@ -534,15 +517,25 @@ class ConferenceApi(remote.Service):
             date            = data['date'],
             startTime       = data['startTime'],
         )
-        print "7. Printing the sesh: ", sesh
-        print "0. Printing the websafeConferenceKey", request.websafeConferenceKey
 
         sesh.put()
+
+        print "1. This is the request.websafeConferenceKey", request.websafeConferenceKey
+        print "2. This is the speaker: ", data['speaker']
+        print "3. This is the whole request: ", request
+
+
+        taskqueue.add(
+            url='/tasks/get_featured_speaker',
+            params={'websafeConferenceKey': request.websafeConferenceKey, 
+                    'speaker': data['speaker']}, 
+            method='GET',
+        )
 
         return self._copySessionToForm(sesh)
 
     @endpoints.method(SESH_POST_REQUEST, SessionForm,
-        path='session/{websafeConferenceKey}',
+        path='createSession/{websafeConferenceKey}',
         http_method='POST',
         name='createSession')
     def createSession(self, request):
@@ -615,12 +608,15 @@ class ConferenceApi(remote.Service):
             items=[self._copySessionToForm(session) for session in sessions]
         ) 
 
+#  ------------
+#  |  TASK 3  |
+#  ------------
     @endpoints.method(SessionForms, SessionForms,
             path='getSessions',
             http_method='GET',
             name='getSessions')
     def getSessions(self, request):
-        """return all sessions across all conferences"""
+        """Return all sessions across all conferences"""
         # make sure user is authed
         user = endpoints.get_current_user()
         if not user:
@@ -631,11 +627,8 @@ class ConferenceApi(remote.Service):
 
         return SessionForms(
             items=[self._copySessionToForm(session) for session in sessions]
-        ) 
+        )
 
-#  ------------
-#  |  TASK 3  |
-#  ------------
     @endpoints.method(DATE_QUERY_REQUEST, SessionForms,
             path='getSessionsByDate',
             http_method='GET',
@@ -686,8 +679,6 @@ class ConferenceApi(remote.Service):
             items=[self._copySessionToForm(session) for session in sessions]
         )
 
-    #def getWishlistByDuration
-
 # - - - WishList - - - - - - - - - - - - - - - - - - - -
 
 #  ------------
@@ -734,7 +725,7 @@ class ConferenceApi(remote.Service):
         return BooleanMessage(data=retval)
 
     @endpoints.method(WISHLIST_POST_REQUEST, BooleanMessage,
-            path='session/{SessionKey}',
+            path='session/addToWishlist/{SessionKey}',
             http_method='POST', 
             name='addSessionToWishlist')
     def addSessionToWishlist(self, request):
@@ -859,7 +850,7 @@ class ConferenceApi(remote.Service):
     @staticmethod
     def _cacheAnnouncement():
         """Create Announcement & assign to memcache; used by
-        memcache cron job & putAnnouncement().
+        memcache cron job & getAnnouncement().
         """
         confs = Conference.query(ndb.AND(
             Conference.seatsAvailable <= 5,
@@ -885,7 +876,8 @@ class ConferenceApi(remote.Service):
 
     @endpoints.method(message_types.VoidMessage, StringMessage,
             path='conference/announcement/get',
-            http_method='GET', name='getAnnouncement')
+            http_method='GET',
+            name='getAnnouncement')
     def getAnnouncement(self, request):
         """Return Announcement from memcache."""
         # TODO 1
@@ -894,5 +886,49 @@ class ConferenceApi(remote.Service):
         if not announcement:
             announcement = ""
         return StringMessage(data=announcement)
+
+#  ------------
+#  |  TASK 4  |
+#  ------------
+    @staticmethod
+    def _cacheFeaturedSpeaker(websafeConferenceKey, speaker):
+        """Assign featured speaker to memcache"""
+        #logging.info('1: This is the websafeConferenceKey: ' + websafeConferenceKey)
+        #logging.info('2: This is the speaker: ' + speaker)
+        
+        conf = ndb.Key(urlsafe=websafeConferenceKey)
+
+        print "3. This is the conf: ", conf
+
+        sessions = Session.query(ancestor=conf)
+
+        sessions = Session.query(Session.speaker == speaker).fetch()
+
+        #print "111. This is the session object:  ", sessions
+        
+        count = len(sessions)
+
+        if count > 1:
+            featured = 'Todays featured speaker is %s at session %s' %\
+             (speaker, ', '.join(session.name for session in sessions))
+            memcache.set(MEMCACHE_FEATURED_KEY, featured)
+        else:
+            # If there are is no featured speaker,
+            # delete the memcache featured entry
+            featured = ""
+            memcache.delete(MEMCACHE_FEATURED_KEY)
+
+        return featured
+
+    @endpoints.method(message_types.VoidMessage, StringMessage,
+            path='session/featured/get',
+            http_method='GET', 
+            name='getFeaturedSpeaker')
+    def getFeaturedSpeaker(self, request):
+        """Return featured speaker from memcache."""
+        featured = memcache.get(MEMCACHE_FEATURED_KEY)
+        if not featured:
+            featured = ""
+        return StringMessage(data=featured)
 
 api = endpoints.api_server([ConferenceApi]) # register API
