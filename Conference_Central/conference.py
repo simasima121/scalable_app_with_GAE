@@ -177,10 +177,10 @@ class ConferenceApi(remote.Service):
                     val = getattr(save_request, field)
                     if val:
                         setattr(prof, field, str(val))
-                        #if field == 'teeShirtSize':
-                        #    setattr(prof, field, str(val).upper())
-                        #else:
-                        #    setattr(prof, field, val)
+                        if field == 'teeShirtSize':
+                            setattr(prof, field, str(val).upper())
+                        else:
+                            setattr(prof, field, val)
             prof.put()
 
         # return ProfileForm
@@ -450,7 +450,7 @@ class ConferenceApi(remote.Service):
                     setattr(sf, field.name, str(getattr(sesh, field.name)))
                 else:
                     setattr(sf, field.name, getattr(sesh, field.name))
-            elif field.name == "confWebSafeKey":
+            elif field.name == "seshWebSafeKey":
                 setattr(sf, field.name, sesh.key.urlsafe())
 
         sf.check_initialized()
@@ -490,7 +490,7 @@ class ConferenceApi(remote.Service):
 
         # copy SessionForm/ProtoRPC Message into dict
         data = {field.name: getattr(request, field.name) for field in request.all_fields()}
-        del data['confWebSafeKey']
+        del data['seshWebSafeKey']
         del data['websafeConferenceKey']
 
         # Convert dates from strings to Date objects; 
@@ -519,11 +519,6 @@ class ConferenceApi(remote.Service):
         )
 
         sesh.put()
-
-        print "1. This is the request.websafeConferenceKey", request.websafeConferenceKey
-        print "2. This is the speaker: ", data['speaker']
-        print "3. This is the whole request: ", request
-
 
         taskqueue.add(
             url='/tasks/get_featured_speaker',
@@ -903,8 +898,6 @@ class ConferenceApi(remote.Service):
         sessions = Session.query(ancestor=conf)
 
         sessions = Session.query(Session.speaker == speaker).fetch()
-
-        #print "111. This is the session object:  ", sessions
         
         count = len(sessions)
 

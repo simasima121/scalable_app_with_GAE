@@ -50,16 +50,7 @@ class SetFeaturedSpeakerHandler(webapp2.RequestHandler):
             self.request.get('websafeConferenceKey'),          
             self.request.get('speaker')
         )
-        #conf_key = self.request.get('websafeConferenceKey')
-        #speaker = self.request.get('speaker')
-        #name = self.request.get('name')
-        #sessions = Session.query(
-        #    Session.websafeConferenceKey == conf_key, 
-        #    Session.speaker == speaker)
-        #featured_speaker = ''
-        #if sessions.count() > 1:
-        #    featured_speaker = 'SPEAKER:%s' %(speaker)
-        #    memcache.set('FEATURED_SPEAKER', featured_speaker)
+        self.response.set_status(204)
 
 
 app = webapp2.WSGIApplication([

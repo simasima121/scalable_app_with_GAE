@@ -93,11 +93,11 @@ class SessionForm(messages.Message):
     name            = messages.StringField(1)
     highlights      = messages.StringField(2)
     speaker         = messages.StringField(3)
-    duration        = messages.IntegerField(4)
+    duration        = messages.IntegerField(4) # Integer value of minutes
     typeOfSession   = messages.StringField(5, repeated=True)
     date            = messages.StringField(6) #DateTimeField()
     startTime       = messages.StringField(7) #DateTimeField()
-    confWebSafeKey  = messages.StringField(8)
+    seshWebSafeKey  = messages.StringField(8)
 
 class SessionForms(messages.Message):
     """SessionForms -- multiple Sessions outbound form message"""
